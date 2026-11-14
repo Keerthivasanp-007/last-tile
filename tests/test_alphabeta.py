@@ -32,23 +32,22 @@ class TestAlphaBeta(unittest.TestCase):
             alphabeta_search(new_game(), depth=0)
 
     def test_terminal_root_returns_none(self):
-        # Player 0 at (0,0) fully boxed in by blocked tiles / opponent.
-        s = GameState(positions=((0, 0), (1, 1)),
-                      blocked=frozenset({(0, 1), (1, 0)}), to_move=0)
+        # Knight at (0,0) can only reach (1,2) and (2,1); both are blocked.
+        s = GameState(positions=((0, 0), (4, 4)),
+                      blocked=frozenset({(1, 2), (2, 1)}), to_move=0)
         self.assertTrue(is_terminal(s))
         r = alphabeta_search(s, depth=2)
         self.assertIsNone(r.move)
         self.assertEqual(r.score, -10_000.0)
 
     def test_takes_win_in_one_ply(self):
-        # P0 at (0,0) can move to (0,1) which traps P1 at (0,2).
-        s = GameState(size=3,
-                      positions=((0, 0), (0, 2)),
-                      blocked=frozenset({(1, 1), (1, 2), (2, 0), (2, 1), (2, 2)}),
-                      to_move=0)
-        # P0 legal: (0,1), (1,0). Moving to (0,1) leaves P1 with no moves.
+        # P1 at (4,4) can only reach (2,3) and (3,2); (2,3) is blocked.
+        # P0 at (1,1) can jump to (3,2), which traps P1 immediately.
+        s = GameState(positions=((1, 1), (4, 4)),
+                      blocked=frozenset({(2, 3)}), to_move=0)
+        self.assertEqual(legal_moves(s), ((0, 3), (3, 0), (3, 2)))
         r = alphabeta_search(s, depth=2)
-        self.assertEqual(r.move, (0, 1))
+        self.assertEqual(r.move, (3, 2))
         self.assertEqual(r.score, 10_000.0)
 
     def test_equivalent_to_minimax(self):
