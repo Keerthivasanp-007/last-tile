@@ -10,7 +10,7 @@
 
 ## 1. Project Overview & The 3 Course Algorithms
 
-**Last Tile** is a 5×5 turn-based Isolation board game implemented in Python with a minimal **Streamlit** browser UI (`streamlit_app.py`) and a single performance comparison script (`benchmark.py`).
+**Last Tile** is a 5×5 turn-based **Knight-Move Isolation** board game implemented in Python with a minimal **Streamlit** browser UI (`streamlit_app.py`) and a single performance comparison script (`benchmark.py`).
 
 All three AI algorithms act directly as **game-playing agents** that take a `GameState` and return a `SearchResult` (chosen move, score, visited states, pruning cutoffs, and execution time):
 
@@ -26,10 +26,12 @@ All three AI algorithms act directly as **game-playing agents** that take a `Gam
 
 1. **Initial State (`new_game`):**
    - 5×5 grid using 0-indexed `(row, col)` coordinates from `(0, 0)` to `(4, 4)`.
-   - Player `0` starts at `(0, 0)` and moves first (`to_move = 0`). Player `1` starts at `(4, 4)`.
+   - Player `0` (Red) starts at `(0, 0)` and moves first (`to_move = 0`). Player `1` (Blue) starts at `(4, 4)`.
    - `blocked` starts as an empty `frozenset`.
 2. **State Space & Legal Actions (`legal_moves`):**
-   - On a turn, the active player moves **1 step in any of the 8 king directions** ($\Delta r \in \{-1, 0, 1\}, \Delta c \in \{-1, 0, 1\}$, excluding $(0, 0)$).
+   - On a turn, the active player moves **like a chess knight** in an L-shape:
+     $$(\Delta r, \Delta c) \in \{(-2,-1), (-2,1), (-1,-2), (-1,2), (1,-2), (1,2), (2,-1), (2,1)\}$$
+   - Knights can **jump over** blocked tiles and the other player, as long as the **landing square** is open.
    - **Constraints:** A destination `(r, c)` is legal if and only if:
      - $0 \le r < \text{size}$ and $0 \le c < \text{size}$ (inside board boundaries)
      - `(r, c)` is **not** in `state.blocked`
@@ -47,7 +49,7 @@ All three AI algorithms act directly as **game-playing agents** that take a `Gam
    - Evaluated at non-terminal states from `root_player`'s perspective (`p = root_player`, `opp = 1 - root_player`):
      $$h(s, p) = 10.0 \times \bigl(|\text{legal\_moves}(s, p)| - |\text{legal\_moves}(s, \text{opp})|\bigr) + \bigl(d_{\text{center}}(\text{pos}[\text{opp}]) - d_{\text{center}}(\text{pos}[p])\bigr)$$
    - Where $d_{\text{center}}(r, c) = |r - c_0| + |c - c_0|$ is the Manhattan distance to the board center $c_0 = \frac{\text{size} - 1}{2}$.
-   - Rewards having more legal moves than the opponent (**Mobility**) and staying closer to the center of the board (**Center Control**). Strictly antisymmetric: `evaluate(s, 0) == -evaluate(s, 1)`.
+   - Rewards having more legal knight moves than the opponent (**Mobility**) and staying closer to the center of the board (**Center Control**). Strictly antisymmetric: `evaluate(s, 0) == -evaluate(s, 1)`.
 
 ---
 
@@ -66,7 +68,7 @@ last-tile/
 ├── last_tile/
 │   ├── __init__.py
 │   ├── contracts.py           # [PRE-BUILT IN SCAFFOLD] Shared dataclasses
-│   ├── game.py                # [Member A] Board rules, transitions, & heuristic
+│   ├── game.py              # [Member A] Board rules, knight moves, & heuristic
 │   └── ai/
 │       ├── __init__.py
 │       ├── hill_climbing.py   # [Member D] Algorithm 1: Steepest-Ascent Hill Climbing
@@ -84,7 +86,7 @@ last-tile/
 
 | Member | Branch | Owned Files | Viva Explanation Focus |
 | :--- | :--- | :--- | :--- |
-| **Member A** | `feature/game` | `last_tile/game.py`, `tests/test_game.py` | Problem formulation (state space, actions, constraints, terminal test) & heuristic $h(s, p)$ |
+| **Member A** | `feature/game` | `last_tile/game.py`, `tests/test_game.py` | Problem formulation (state space, knight actions, constraints, terminal test) & heuristic $h(s, p)$ |
 | **Member B** | `feature/minimax` | `last_tile/ai/minimax.py`, `tests/test_minimax.py` | Adversarial search tree, maximizing/minimizing recursion, depth cutoff |
 | **Member C** | `feature/alphabeta` | `last_tile/ai/alphabeta.py`, `tests/test_alphabeta.py`, `benchmark.py` | $\alpha$-$\beta$ pruning condition ($\beta \le \alpha$), equivalence with Minimax, performance metrics |
 | **Member D** | `feature/ui-hillclimb` | `last_tile/ai/hill_climbing.py`, `tests/test_hill_climbing.py`, `streamlit_app.py` | Steepest-Ascent Hill Climbing local search, local optima limitation, Streamlit UI |
@@ -130,7 +132,7 @@ class SearchResult:
 1. `new_game(size: int = 5) -> GameState` (already provided in scaffold).
 2. `legal_moves(state: GameState, player: int | None = None) -> tuple[Move, ...]`:
    - If `player is None`, use `state.to_move`. Validate `player in (0, 1)`.
-   - Return a sorted tuple of all legal 1-step king moves `(r, c)` from `state.positions[player]` that are inside the `size × size` grid, not in `state.blocked`, and not in `state.positions`.
+   - Return a sorted tuple of all legal L-shaped **knight moves** `(r, c)` from `state.positions[player]` that are inside the `size × size` grid, not in `state.blocked`, and not in `state.positions`.
 3. `apply_move(state: GameState, move: Move) -> GameState`:
    - Raise `ValueError` if `move not in legal_moves(state)`.
    - Return a new `GameState` with the active player's old position added to `state.blocked`, active player moved to `move`, and `to_move = 1 - state.to_move`.
@@ -141,7 +143,7 @@ class SearchResult:
 6. `evaluate(state: GameState, root_player: int) -> float`:
    - Validate `root_player in (0, 1)`.
    - Compute mobility difference `len(legal_moves(state, root_player)) - len(legal_moves(state, 1 - root_player))` and center-distance difference as defined in Section 2. Return `float(10.0 * mobility_diff + center_diff)`.
-7. **Tests (`tests/test_game.py`):** Test corner/center move counts, blocking of previous tile, rejection of illegal moves, terminal win detection, and `evaluate(s, 0) == -evaluate(s, 1)`.
+7. **Tests (`tests/test_game.py`):** Test corner knight moves (`(0, 0)` has `[(1, 2), (2, 1)]`), center knight moves (8 moves), blocking of previous tile, rejection of illegal moves, terminal win detection, and `evaluate(s, 0) == -evaluate(s, 1)`.
 
 ### Member B — Algorithm 2: Minimax Search (`last_tile/ai/minimax.py` & `tests/test_minimax.py`)
 1. `minimax_search(state: GameState, depth: int = 3) -> SearchResult`:
@@ -176,8 +178,8 @@ class SearchResult:
    - Record `elapsed_ms` and return `SearchResult(move=best_move, score=best_score, stats=stats)`.
 2. **Tests (`tests/test_hill_climbing.py`):** Verify legal move selection, `nodes_visited == 1 + len(legal_moves(state))`, and immediate winning move selection when available.
 3. **Streamlit UI (`streamlit_app.py`):**
-   - Sidebar: Select AI Agent (`Alpha-Beta Pruning`, `Minimax`, or `Hill Climbing (Local Search)`), Search Depth slider (`1`–`4`, disabled when Hill Climbing is selected), Human Side (`Player 0` or `Player 1`), and `New Game` button.
-   - Main Board: 5×5 clickable button grid showing Player 0 (`🔵 P0`), Player 1 (`🔴 P1`), blocked tiles (`⬛`), and highlighted legal moves (`🟢`), plus an explicit **`Make AI Move`** button and a live metrics row showing `Move Chosen`, `Nodes Visited`, `Pruning Cutoffs`, and `Time (ms)`.
+   - Sidebar: Select AI Agent (`Alpha-Beta`, `Minimax`, or `Hill Climbing`), Board Size (`5×5` / `7×7`), AI Move Delay, `New Game` button, and `Play Game` / `Benchmarks` view switch.
+   - Main Board: Centered square grid with Red (`1`) and Blue (`2`) knight tokens, blocked tiles, and green clickable legal destinations.
 
 ---
 
